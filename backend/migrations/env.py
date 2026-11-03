@@ -33,6 +33,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        version_table_schema=settings.database_schema,
     )
 
     with context.begin_transaction():
@@ -41,7 +42,15 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     """Run migrations with the given connection."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    schema = settings.database_schema
+    # Quoted identifier: database_schema is restricted to a single SQL identifier.
+    if schema:
+        connection.exec_driver_sql(f'SET search_path TO "{schema}"')
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        version_table_schema=schema,
+    )
 
     with context.begin_transaction():
         # Every revision runs in this one transaction, so this covers each LOCK and ALTER on the
@@ -49,6 +58,8 @@ def do_run_migrations(connection: Connection) -> None:
         # session (or a killed client's backend, since client_connection_check_interval is 0)
         # waits forever while holding the locks it already took.
         context.execute("SET LOCAL lock_timeout = '10s'")
+        if schema:
+            context.execute(f'SET LOCAL search_path TO "{schema}"')
         context.run_migrations()
 
 

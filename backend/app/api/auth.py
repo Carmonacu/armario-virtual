@@ -87,6 +87,7 @@ async def get_auth_config() -> AuthConfigResponse:
         ),
         dev_mode=settings.dev_mode,
         forward_auth=forward_auth,
+        supabase=settings.supabase_configured,
         mobile_notice=FORWARD_AUTH_ONLY_MOBILE_NOTICE
         if forward_auth and not oidc_enabled
         else None,
@@ -235,6 +236,11 @@ async def _body_identity(
         return sync_data, "dev", True
     if settings.oidc_configured:
         return await _oidc_identity(request, sync_data)
+    if settings.supabase_configured:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in with Supabase",
+        )
     if settings.forward_auth_configured:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

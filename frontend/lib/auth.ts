@@ -217,7 +217,13 @@ function getProviders() {
     providers.push(OIDCProvider);
   }
 
-  if (process.env.DEV_MODE === 'true' || process.env.NODE_ENV === 'development') {
+  // Dev login is local only. A production build (Vercel) never offers it, even if DEV_MODE
+  // is set, and it stays hidden once Supabase Auth is the sign-in path.
+  const devLogin =
+    process.env.NODE_ENV !== 'production' &&
+    !process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    (process.env.DEV_MODE === 'true' || process.env.NODE_ENV === 'development');
+  if (devLogin) {
     providers.push(DevCredentialsProvider);
   }
   return providers;

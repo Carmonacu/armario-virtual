@@ -1,7 +1,8 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { signIn, getProviders, getSession, useSession } from 'next-auth/react';
+import { getProviders, getSession, signIn } from 'next-auth/react';
+import { useSession } from '@/lib/session';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -13,6 +14,140 @@ import {
   FORWARD_AUTH_USERNAME_CONFLICT,
 } from '@/lib/auth-errors';
 import { useAuthConfig } from '@/lib/hooks/use-auth-config';
+import { supabaseBrowser } from '@/lib/supabase/browser';
+import {
+  isSupabaseAuthEnabled,
+  supabaseOAuthProviders,
+  type SupabaseOAuthProvider,
+} from '@/lib/supabase/env';
+
+function oauthProviderLabel(
+  provider: SupabaseOAuthProvider,
+  t: (key: 'supabase.providers.google' | 'supabase.providers.github') => string
+) {
+  return provider === 'google' ? t('supabase.providers.google') : t('supabase.providers.github');
+}
+
+function SupabaseLogin({ getCallbackUrl }: { getCallbackUrl: () => string }) {
+  const t = useTranslations('auth');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const providers = supabaseOAuthProviders();
+
+  const redirectTo = () =>
+    `${window.location.origin}/auth/callback?next=${encodeURIComponent(getCallbackUrl())}`;
+
+  const signInWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    setNotice(null);
+    const { error: authError } = await supabaseBrowser().auth.signInWithPassword({ email, password });
+    setIsLoading(false);
+    if (authError) setError(t('supabase.invalidCredentials'));
+  };
+
+  const sendMagicLink = async () => {
+    if (!email) return;
+    setIsLoading(true);
+    setError(null);
+    const { error: authError } = await supabaseBrowser().auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo() },
+    });
+    setIsLoading(false);
+    if (authError) {
+      setError(t('errors.default'));
+      return;
+    }
+    setNotice(t('supabase.magicLinkSent'));
+  };
+
+  const startOAuth = async (provider: SupabaseOAuthProvider) => {
+    setError(null);
+    const { error: authError } = await supabaseBrowser().auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: redirectTo() },
+    });
+    if (authError) setError(t('errors.default'));
+  };
+
+  return (
+    <form onSubmit={signInWithPassword} className="space-y-4">
+      {error && (
+        <div className="rounded-md bg-destructive/15 p-4 text-sm text-destructive">{error}</div>
+      )}
+      {notice && <div className="rounded-md bg-primary/10 p-4 text-sm">{notice}</div>}
+      <div className="space-y-2">
+        <label htmlFor="supabase-email" className="block text-sm font-medium">
+          {t('email')}
+        </label>
+        <input
+          id="supabase-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="supabase-password" className="block text-sm font-medium">
+          {t('supabase.password')}
+        </label>
+        <input
+          id="supabase-password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t('signingIn')}
+          </>
+        ) : (
+          t('supabase.signIn')
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={sendMagicLink}
+        disabled={isLoading || !email}
+        className="flex w-full items-center justify-center rounded-md border border-input px-4 py-3 text-sm hover:bg-accent disabled:opacity-50"
+      >
+        {t('supabase.magicLink')}
+      </button>
+      {providers.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-center text-sm text-muted-foreground">{t('supabase.or')}</p>
+          {providers.map((provider) => (
+            <button
+              key={provider}
+              type="button"
+              onClick={() => startOAuth(provider)}
+              className="flex w-full items-center justify-center rounded-md border border-input px-4 py-3 text-sm hover:bg-accent"
+            >
+              {t('supabase.oauth', { provider: oauthProviderLabel(provider, t) })}
+            </button>
+          ))}
+        </div>
+      )}
+    </form>
+  );
+}
 
 function OIDCLoginButton({ getCallbackUrl }: { getCallbackUrl: () => string }) {
   const t = useTranslations('auth');
@@ -240,8 +375,10 @@ function LoginContent() {
 
   const [providerMode, setProviderMode] = useState<'loading' | 'oidc' | 'dev' | 'unconfigured'>('loading');
   const authConfig = useAuthConfig();
+  const supabaseAuth = isSupabaseAuthEnabled();
 
   useEffect(() => {
+    if (supabaseAuth) return;
     getProviders().then((providers) => {
       if (providers?.['oidc']) {
         setProviderMode('oidc');
@@ -251,13 +388,15 @@ function LoginContent() {
         setProviderMode('unconfigured');
       }
     });
-  }, []);
+  }, [supabaseAuth]);
 
-  const authMode = authConfig.isPending
-    ? 'loading'
-    : authConfig.data?.forward_auth
-      ? 'forward'
-      : providerMode;
+  const authMode = supabaseAuth
+    ? 'supabase'
+    : authConfig.isPending
+      ? 'loading'
+      : authConfig.data?.forward_auth
+        ? 'forward'
+        : providerMode;
 
   const forward = useForwardSignIn(
     authMode === 'forward' && status === 'unauthenticated' && !error && !loggedOut
@@ -291,6 +430,7 @@ function LoginContent() {
       )}
 
       <div className="space-y-4">
+        {authMode === 'supabase' && <SupabaseLogin getCallbackUrl={getCallbackUrl} />}
         {authMode === 'forward' && (
           <ForwardLogin
             state={forward.state}

@@ -17,7 +17,7 @@ class UserIdentity(Base):
         UniqueConstraint("provider", "subject", name="uq_user_identities_provider_subject"),
         UniqueConstraint("user_id", "provider", name="uq_user_identities_user_provider"),
         CheckConstraint(
-            "provider IN ('legacy', 'dev', 'oidc', 'forward_auth')",
+            "provider IN ('legacy', 'dev', 'oidc', 'forward_auth', 'supabase')",
             name="ck_user_identities_provider",
         ),
     )

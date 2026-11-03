@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/session';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   Shirt,
@@ -52,7 +52,9 @@ import { ItemPicker } from '@/components/shared/item-picker';
 import { OccasionChips } from '@/components/shared/occasion-chips';
 import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { useItem } from '@/lib/hooks/use-items';
+import { usePreparedOutfits } from '@/lib/hooks/use-outfits';
 import { api, ApiError } from '@/lib/api';
+import { isAiUnavailable } from '@/lib/ai-unavailable';
 import { applySessionToken } from '@/lib/hooks/use-session-token';
 import { ClothingTypeValue, CurrentWeather, Item, Outfit, SuggestRequest } from '@/lib/types';
 import { useWeather } from '@/lib/hooks/use-weather';
@@ -603,6 +605,19 @@ function SuggestContent() {
   const [activeOptionIndex, setActiveOptionIndex] = useState<number>(0);
   const [isCompareAll, setIsCompareAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preparedNote, setPreparedNote] = useState(false);
+  const [aiNote, setAiNote] = useState(false);
+  const prepared = usePreparedOutfits();
+  const hidPrepared = useRef(false);
+
+  useEffect(() => {
+    if (hidPrepared.current || isGenerating || outfits.length > 0) return;
+    if (prepared.data && prepared.data.length > 0) {
+      setOutfits(prepared.data);
+      setPreparedNote(true);
+      setAiNote(false);
+    }
+  }, [prepared.data, isGenerating, outfits.length]);
 
   useEffect(() => {
     if (preselectedItem && !selectedItem) {
@@ -624,6 +639,7 @@ function SuggestContent() {
 
     setIsGenerating(true);
     setError(null);
+    setAiNote(false);
 
     try {
       const request: SuggestRequest = {
@@ -644,8 +660,19 @@ function SuggestContent() {
       const result = await api.post<Outfit[]>('/outfits/suggest-options', request);
       setOutfits(result);
       setActiveOptionIndex(0);
+      const unavailable = result.some((outfit) => outfit.ai_unavailable);
+      setAiNote(unavailable);
+      setPreparedNote(unavailable);
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (isAiUnavailable(err)) {
+        if (prepared.data && prepared.data.length > 0) {
+          setOutfits(prepared.data);
+          setPreparedNote(true);
+          setAiNote(true);
+        } else {
+          setError(t('aiUnavailableEmpty'));
+        }
+      } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
         setError(t('error'));
@@ -710,6 +737,9 @@ function SuggestContent() {
     setIsCompareAll(false);
     setSelectedOccasion(null);
     setError(null);
+    setPreparedNote(false);
+    setAiNote(false);
+    hidPrepared.current = true;
   };
 
   return (
@@ -731,6 +761,14 @@ function SuggestContent() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {(aiNote || preparedNote) && outfits.length > 0 && !error && (
+        <Alert>
+          <AlertDescription>
+            {aiNote ? t('aiUnavailable') : t('pregenerated')}
+          </AlertDescription>
         </Alert>
       )}
 

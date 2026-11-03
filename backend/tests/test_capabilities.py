@@ -320,7 +320,9 @@ async def test_suggest_returns_503_when_text_disabled(client, auth_headers, monk
         "/api/v1/outfits/suggest", json={"occasion": "casual"}, headers=auth_headers
     )
     assert resp.status_code == 503
-    assert "external agent" in resp.json()["detail"]
+    # Nothing was prepared overnight, so the UI can show its translated fallback
+    # instead of the old English "external agent" sentence.
+    assert resp.json()["detail"]["code"] == "ai_unavailable"
 
 
 @pytest.mark.asyncio

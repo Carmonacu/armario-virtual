@@ -1,7 +1,7 @@
 'use client';
 
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/session';
 import { api } from '@/lib/api';
 import { applySessionToken } from '@/lib/hooks/use-session-token';
 import { queryKeys } from '@/lib/hooks/query-keys';

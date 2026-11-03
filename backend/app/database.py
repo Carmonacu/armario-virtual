@@ -9,6 +9,15 @@ from app.config import get_settings
 
 settings = get_settings()
 
+
+def asyncpg_connect_args() -> dict:
+    """Pin the connection to DATABASE_SCHEMA so other Supabase schemas stay untouched."""
+    schema = get_settings().database_schema
+    if not schema:
+        return {}
+    return {"server_settings": {"search_path": schema}}
+
+
 # Create async engine
 engine = create_async_engine(
     str(settings.database_url),
@@ -16,6 +25,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
+    connect_args=asyncpg_connect_args(),
 )
 
 # Create session factory

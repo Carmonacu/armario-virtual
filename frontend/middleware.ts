@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getToken, type JWT } from 'next-auth/jwt';
 import { decodeProxyHeader, proxySecretMatches } from '@/lib/proxy-headers';
 import { clearSessionCookies, sessionCookie } from '@/lib/session-cookies';
+import { isSupabaseAuthEnabled } from '@/lib/supabase/env';
+import { updateSupabaseSession } from '@/lib/supabase/middleware';
 
 // A proxy that switches users keeps the old NextAuth session cookie, and a GET to
 // /api/auth/signout only renders a confirmation page, so the session is ended here.
@@ -46,6 +48,9 @@ async function sessionToken(request: NextRequest): Promise<JWT | null> {
 }
 
 export async function middleware(request: NextRequest) {
+  if (isSupabaseAuthEnabled()) {
+    return updateSupabaseSession(request);
+  }
   const { pathname, search } = request.nextUrl;
   if (pathname === LOGIN_PATH) {
     const response = NextResponse.next();

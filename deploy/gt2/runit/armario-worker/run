@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+ROOT="${ARMARIO_ROOT:-$HOME/armario-virtual}"
+VENV="${ARMARIO_VENV:-$HOME/.venv/armario}"
+ENV_FILE="${ARMARIO_ENV:-$HOME/armario.env}"
+
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+
+export AI_TEXT_ENABLED=false
+export AI_VISION_ENABLED=false
+export DEBUG=false
+
+cd "$ROOT/backend"
+exec "$VENV/bin/arq" app.workers.worker.WorkerSettings

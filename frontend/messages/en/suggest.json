@@ -102,5 +102,8 @@
     "reset": "Reset",
     "temperature": "Temperature"
   },
-  "yourOutfit": "Your Outfit"
+  "yourOutfit": "Your Outfit",
+  "pregenerated": "These outfits were prepared overnight and are ready to use.",
+  "aiUnavailable": "The assistant is off during the day. This is the outfit prepared last night; a new one will be generated tonight.",
+  "aiUnavailableEmpty": "The assistant is off right now and there is no outfit prepared for today. Try again in the morning, after the nightly run."
 }

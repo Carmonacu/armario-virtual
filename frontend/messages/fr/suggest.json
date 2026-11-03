@@ -102,5 +102,8 @@
     "reset": "Réinitialiser",
     "temperature": "Température"
   },
-  "yourOutfit": "Votre tenue"
+  "yourOutfit": "Votre tenue",
+  "pregenerated": "Ces tenues ont été préparées cette nuit et sont prêtes.",
+  "aiUnavailable": "L'assistant est éteint dans la journée. Voici la tenue préparée cette nuit ; une nouvelle sera générée ce soir.",
+  "aiUnavailableEmpty": "L'assistant est indisponible et aucune tenue n'a été préparée pour aujourd'hui. Réessayez demain matin, après la génération nocturne."
 }

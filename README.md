@@ -220,6 +220,10 @@ docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
 
 Images are tagged `backend-latest` / `frontend-latest`, and each release also publishes `backend-<version>` / `frontend-<version>`. To pin a release, replace the `-latest` tags in the compose file, e.g. `ghcr.io/anyesh/wardrowbe:backend-1.12.0`. Releases from 1.12.1 on also publish the same tags in version-first form, `<version>-backend` / `<version>-frontend`. If Renovate keeps your pins up to date, use that form (`ghcr.io/anyesh/wardrowbe:<version>-backend`): Renovate's default Docker versioning reads it as a version for the `backend` variant and proposes upgrades without a custom rule, while it cannot parse `backend-<version>`.
 
+### Este fork: Vercel + teléfono + Supabase
+
+El frontend se despliega en Vercel (`deploy/vercel/README.md`) y el API corre sin Docker en un Realme GT 2 con Termux/proot, expuesto por Tailscale Funnel (`deploy/gt2/README.md`, en español). El login de producción es Supabase Auth del proyecto `jvuzcuntgfmcjrrbsmda`. Los conjuntos del día siguiente se generan de noche con `python -m app.jobs.nightly_outfits` mientras el modelo de texto está encendido; de día la app enseña esos conjuntos y no llama a la IA.
+
 ### Kubernetes
 
 See [k8s/](k8s/) for manifests (PostgreSQL and Redis with persistent storage, backend API and worker, frontend, ingress with TLS, network policies). The [k8s README](k8s/README.md#upgrading) has the upgrade steps for a cluster.

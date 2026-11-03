@@ -12,6 +12,7 @@ export const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 // Keyed by SupportedLocale so tsc fails when a code in backend/app/data/locales.json has no entry.
 export const LOCALE_METADATA: Record<SupportedLocale, { name: string; nativeName: string; dir: 'ltr' | 'rtl' }> = {
+  es: { name: 'Spanish (Spain)', nativeName: 'Español (España)', dir: 'ltr' },
   en: { name: 'English', nativeName: 'English', dir: 'ltr' },
   'zh-CN': { name: 'Chinese (Simplified)', nativeName: '中文简体', dir: 'ltr' },
   'zh-TW': { name: 'Chinese (Traditional)', nativeName: '中文繁體', dir: 'ltr' },
@@ -59,10 +60,14 @@ export function readLocaleCookie(): SupportedLocale | undefined {
   return isValidLocale(value) ? value : undefined;
 }
 
-/** Maps a browser Accept-Language tag onto a supported locale: exact match first, then the
- *  base language, so `de-AT` resolves to `de` and `zh-HK` to `zh-TW` rather than to English. */
-export function resolveLocale(candidate: string | undefined | null): SupportedLocale {
-  if (!candidate) return DEFAULT_LOCALE;
+/** The catalog a missing key falls back to. Independent of DEFAULT_LOCALE, which this fork sets to Spanish. */
+export const SOURCE_LOCALE = 'en' as const satisfies SupportedLocale;
+
+/** Maps a browser language tag onto a supported locale, or undefined when the tag names none.
+ *  Exact match first, then the base language, so `de-AT` resolves to `de`, `es-ES` to `es`
+ *  and `zh-HK` to `zh-TW`. */
+export function matchSupportedLocale(candidate: string | undefined | null): SupportedLocale | undefined {
+  if (!candidate) return undefined;
   if (isValidLocale(candidate)) return candidate;
 
   const lower = candidate.toLowerCase();
@@ -74,6 +79,10 @@ export function resolveLocale(candidate: string | undefined | null): SupportedLo
   }
 
   const base = lower.split('-')[0];
-  const byBase = SUPPORTED_LOCALES.find((l) => l.toLowerCase().split('-')[0] === base);
-  return byBase ?? DEFAULT_LOCALE;
+  return SUPPORTED_LOCALES.find((l) => l.toLowerCase().split('-')[0] === base);
+}
+
+/** Maps a browser Accept-Language tag onto a supported locale, using the fork default when nothing matches. */
+export function resolveLocale(candidate: string | undefined | null): SupportedLocale {
+  return matchSupportedLocale(candidate) ?? DEFAULT_LOCALE;
 }

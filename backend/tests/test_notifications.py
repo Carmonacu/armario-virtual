@@ -1261,6 +1261,29 @@ class TestDispatcherDelivery:
 
         assert message.title == title
 
+    def test_spanish_locale_names_the_outfit_in_spanish(self):
+        outfit = SimpleNamespace(
+            id=uuid4(),
+            scheduled_for=TODAY,
+            occasion="date",
+            weather_data={"temperature": 18.0, "condition": "Sunny"},
+            reasoning=None,
+            ai_raw_response=None,
+            style_notes="Remángate",
+        )
+        user = SimpleNamespace(display_name="Ana", timezone="UTC", locale="es")
+
+        message = NotificationDispatcher(None)._build_outfit_message(outfit, user)
+
+        assert message.title == "Conjunto cita de hoy - 18°C"
+        assert message.heading == "Conjunto de hoy: cita"
+        assert message.greeting == (
+            "Buenos días, Ana. Aquí tienes la sugerencia de conjunto para hoy:"
+        )
+        assert message.short_body == "Consejo: Remángate"
+        assert message.weather.condition == "soleado"
+        assert message.url_label == "Ver conjunto"
+
     async def _retrying_mattermost(self, db_session: AsyncSession, test_user, outfit):
         db_session.add(
             NotificationSettings(

@@ -500,6 +500,20 @@ class TestWashReminderMessage:
         assert message.url_label == "View Wardrobe"
         assert message.data == {"screen": "wardrobe"}
 
+    def test_spanish_names_the_wash_and_translates_an_unnamed_type(self, monkeypatch):
+        settings = Settings(_env_file=None, app_url="https://x.com")
+        monkeypatch.setattr("app.workers.notifications.get_settings", lambda: settings)
+
+        message = wash_reminder_message(
+            [ClothingItem(type="shirt"), ClothingItem(type="jeans", name="Vaqueros rotos")],
+            locale="es",
+        )
+
+        assert message.title == "Recordatorio de lavado"
+        assert message.body == "2 prendas necesitan lavado: camisa, Vaqueros rotos"
+        assert message.url_label == "Ver armario"
+        assert message.locale == "es"
+
 
 def _http_response(url: str, status_code: int = 200) -> httpx.Response:
     request = httpx.Request("POST", url)

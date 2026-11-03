@@ -164,7 +164,7 @@ async def test_notification_setting(
         raise HTTPException(status_code=404, detail="Setting not found")
     if error := channel_config_error(setting.channel, setting.config):
         raise HTTPException(status_code=400, detail=error)
-    success, message = await service.test_setting(setting)
+    success, message = await service.test_setting(setting, locale=current_user.locale)
     if not success:
         raise HTTPException(status_code=400, detail=message)
     return TestNotificationResponse(success=True, message=message)

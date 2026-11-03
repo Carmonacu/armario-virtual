@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -165,10 +167,18 @@ class TestBadStoredTimezone:
 
 class TestUserLocale:
     @pytest.mark.asyncio
-    async def test_default_locale_is_en(self, client: AsyncClient, test_user, auth_headers):
-        response = await client.get("/api/v1/users/me", headers=auth_headers)
-        assert response.status_code == 200
-        assert response.json()["locale"] == "en"
+    async def test_new_user_defaults_to_spanish(self, db_session: AsyncSession):
+        unique_id = uuid4()
+        user = User(
+            id=unique_id,
+            external_id=f"locale-default-{unique_id}",
+            email=f"locale-default-{unique_id}@example.com",
+            display_name="Ana",
+        )
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+        assert user.locale == "es"
 
     @pytest.mark.asyncio
     async def test_update_locale(self, client: AsyncClient, test_user, auth_headers):
@@ -185,7 +195,7 @@ class TestUserLocale:
         assert response.json()["locale"] == "zh-CN"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("locale", ["en", "zh-CN", "zh-TW", "ko", "ja", "fr", "de", "it"])
+    @pytest.mark.parametrize("locale", ["es", "en", "zh-CN", "zh-TW", "ko", "ja", "fr", "de", "it"])
     async def test_all_supported_locales_accepted(
         self, client: AsyncClient, test_user, auth_headers, locale
     ):

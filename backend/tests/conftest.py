@@ -148,6 +148,8 @@ async def test_user_identity(db_session: AsyncSession) -> UserIdentity:
         email=f"test-{unique_id}@example.com",
         display_name="Test User",
         timezone="UTC",
+        # The product default is Spanish. Tests that assert English notification copy pin English here.
+        locale="en",
         is_active=True,
         onboarding_completed=False,
         email_verified=True,

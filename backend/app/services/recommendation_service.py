@@ -10,6 +10,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.i18n.copy import outfit_copy_instruction
 from app.models.item import ClothingItem, ItemStatus
 from app.models.learning import ItemPairScore, UserLearningProfile
 from app.models.outfit import (
@@ -982,6 +983,7 @@ class RecommendationService:
                 prompt,
                 flags=re.DOTALL,
             )
+        prompt += outfit_copy_instruction(getattr(user, "locale", None))
 
         logger.info(
             f"Generating recommendation for user {user.id}, "

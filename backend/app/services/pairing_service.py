@@ -7,6 +7,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.i18n.copy import outfit_copy_instruction
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
@@ -215,6 +216,7 @@ class PairingService:
             items_text=items_text,
             num_pairings=num_pairings,
         )
+        prompt += outfit_copy_instruction(getattr(user, "locale", None))
 
         logger.info(
             f"Generating {num_pairings} pairings for user {user.id}, "

@@ -16,6 +16,7 @@ from email_validator import EmailNotValidError
 from pydantic import BaseModel, ValidationError
 
 from app.config import get_settings
+from app.i18n.copy import email_chrome, is_spanish
 from app.models.notification import NotificationSettings, NotificationStatus
 from app.schemas.email import smtp_address
 from app.schemas.notification import (
@@ -54,6 +55,7 @@ class NotificationMessage:
     body: str
     url: str | None = None
     url_label: str = "Open Wardrowbe"
+    locale: str = "en"
     tags: list[str] = field(default_factory=list)
     data: dict = field(default_factory=dict)
     heading: str | None = None
@@ -159,19 +161,27 @@ class NtfyProvider:
             )
         )
 
-    async def test_connection(self) -> tuple[bool, str]:
+    async def test_connection(self, locale: str | None = None) -> tuple[bool, str]:
+        if is_spanish(locale):
+            title = "Prueba de Wardrowbe"
+            message = "Este es un aviso de prueba de Wardrowbe."
+            ok = "Aviso de prueba enviado"
+        else:
+            title = "Wardrowbe Test"
+            message = "This is a test notification from Wardrowbe."
+            ok = "Test notification sent successfully"
         try:
             result = await self.send(
                 NtfyNotification(
                     topic=self.topic,
-                    title="Wardrowbe Test",
-                    message="This is a test notification from Wardrowbe.",
+                    title=title,
+                    message=message,
                     tags=["white_check_mark", "shirt"],
                     priority=2,
                 )
             )
             if result.get("success"):
-                return True, "Test notification sent successfully"
+                return True, ok
             return False, result.get("error", "Unknown error")
         except Exception as e:
             return False, str(e)
@@ -239,7 +249,7 @@ def _mattermost_text(message: NotificationMessage) -> str:
     if message.highlights:
         parts.append("\n".join(f"- {_mattermost_escape(h)}" for h in message.highlights))
     if message.tip:
-        parts.append(f"_Tip: {_mattermost_escape(message.tip)}_")
+        parts.append(f"_{email_chrome(message.locale)['tip']}: {_mattermost_escape(message.tip)}_")
     return "\n\n".join(parts)
 
 
@@ -297,13 +307,21 @@ class MattermostProvider:
             )
         )
 
-    async def test_connection(self) -> tuple[bool, str]:
+    async def test_connection(self, locale: str | None = None) -> tuple[bool, str]:
+        text = (
+            "Este es un mensaje de prueba de Wardrowbe."
+            if is_spanish(locale)
+            else "This is a test message from Wardrowbe."
+        )
+        ok = (
+            "Aviso de prueba enviado"
+            if is_spanish(locale)
+            else "Test notification sent successfully"
+        )
         try:
-            result = await self.send(
-                MattermostMessage(text="This is a test message from Wardrowbe.")
-            )
+            result = await self.send(MattermostMessage(text=text))
             if result.get("success"):
-                return True, "Test notification sent successfully"
+                return True, ok
             return False, result.get("error", "Unknown error")
         except Exception as e:
             return False, str(e)
@@ -442,21 +460,29 @@ class EmailProvider:
     async def deliver(self, message: NotificationMessage) -> dict:
         return await self.send(build_notification_email(self.to_address, message))
 
-    async def test_connection(self) -> tuple[bool, str]:
+    async def test_connection(self, locale: str | None = None) -> tuple[bool, str]:
         if not self.is_configured():
             return False, "SMTP not configured"
 
+        if is_spanish(locale):
+            subject = "Wardrowbe - Aviso de prueba"
+            body = "Este es un correo de prueba de Wardrowbe."
+            ok = "Correo de prueba enviado"
+        else:
+            subject = "Wardrowbe - Test Notification"
+            body = "This is a test email from Wardrowbe."
+            ok = "Test email sent successfully"
         try:
             result = await self.send(
                 EmailMessage(
                     to=self.to_address,
-                    subject="Wardrowbe - Test Notification",
-                    html_body="<p>This is a test email from Wardrowbe.</p>",
-                    text_body="This is a test email from Wardrowbe.",
+                    subject=subject,
+                    html_body=f"<p>{body}</p>",
+                    text_body=body,
                 )
             )
             if result.get("success"):
-                return True, "Test email sent successfully"
+                return True, ok
             return False, result.get("error", "Unknown error")
         except Exception as e:
             return False, str(e)
@@ -531,17 +557,19 @@ class ExpoPushProvider:
             )
         )
 
-    async def test_connection(self) -> tuple[bool, str]:
+    async def test_connection(self, locale: str | None = None) -> tuple[bool, str]:
+        if is_spanish(locale):
+            title = "Prueba de Wardrowbe"
+            body = "¡Los avisos push funcionan!"
+            ok = "Aviso push de prueba enviado"
+        else:
+            title = "Wardrowbe Test"
+            body = "Push notifications are working!"
+            ok = "Test push notification sent successfully"
         try:
-            result = await self.send(
-                ExpoPushMessage(
-                    to=self.push_token,
-                    title="Wardrowbe Test",
-                    body="Push notifications are working!",
-                )
-            )
+            result = await self.send(ExpoPushMessage(to=self.push_token, title=title, body=body))
             if result.get("success"):
-                return True, "Test push notification sent successfully"
+                return True, ok
             return False, result.get("error", "Unknown error")
         except Exception as e:
             return False, str(e)
@@ -550,7 +578,7 @@ class ExpoPushProvider:
 class NotificationProvider(Protocol):
     async def deliver(self, message: NotificationMessage) -> dict: ...
 
-    async def test_connection(self) -> tuple[bool, str]: ...
+    async def test_connection(self, locale: str | None = None) -> tuple[bool, str]: ...
 
 
 @dataclass(frozen=True)
@@ -639,12 +667,13 @@ def _html_text(text: str) -> str:
     return "<br>".join(html.escape(line, quote=False) for line in text.split("\n"))
 
 
-def _email_weather_html(weather: WeatherSummary | None) -> str:
+def _email_weather_html(weather: WeatherSummary | None, locale: str) -> str:
     if weather is None:
         return ""
+    chrome = email_chrome(locale)
     temperature = format_temperature(weather.temperature)
-    condition = html.escape(weather.condition or "Unknown", quote=False)
-    forecast_note = " (forecast)" if weather.forecast else ""
+    condition = html.escape(weather.condition or chrome["unknown"], quote=False)
+    forecast_note = chrome["forecast"] if weather.forecast else ""
     return f"""
     <p style="color: #6B7280; margin: 0;">
         {temperature}, {condition}{forecast_note}
@@ -666,13 +695,14 @@ def _email_highlights_html(highlights: list[str]) -> str:
     """
 
 
-def _email_tip_html(tip: str | None) -> str:
+def _email_tip_html(tip: str | None, locale: str) -> str:
     if not tip:
         return ""
+    label = html.escape(email_chrome(locale)["tip"], quote=False)
     return f"""
     <div style="background: #F3F4F6; border-radius: 8px; padding: 12px; margin: 15px 0; border: 1px solid #E5E7EB;">
         <p style="color: #4B5563; margin: 0;">
-            <strong style="color: #1F2937;">Tip:</strong> {html.escape(tip, quote=False)}
+            <strong style="color: #1F2937;">{label}:</strong> {html.escape(tip, quote=False)}
         </p>
     </div>
     """
@@ -692,6 +722,7 @@ def _email_cta_html(message: NotificationMessage) -> str:
 
 
 def _email_text(message: NotificationMessage) -> str:
+    chrome = email_chrome(message.locale)
     lead = message.lead if message.has_sections else message.body
     parts = [f"Wardrowbe - {message.full_heading}"]
     if lead:
@@ -699,7 +730,7 @@ def _email_text(message: NotificationMessage) -> str:
     if message.highlights:
         parts.append("\n".join(f"- {h}" for h in message.highlights))
     if message.tip:
-        parts.append(f"Tip: {message.tip}")
+        parts.append(f"{chrome['tip']}: {message.tip}")
     if message.url:
         parts.append(f"{message.url_label}: {message.url}")
     return "\n\n".join(parts)
@@ -707,6 +738,7 @@ def _email_text(message: NotificationMessage) -> str:
 
 def build_notification_email(to: str, message: NotificationMessage) -> EmailMessage:
     settings_url = get_settings().app_link("/dashboard/notifications")
+    chrome = email_chrome(message.locale)
     lead = message.lead if message.has_sections else message.body
     lead_html = ""
     if lead:
@@ -730,22 +762,22 @@ def build_notification_email(to: str, message: NotificationMessage) -> EmailMess
         <h2 style="color: #1F2937; margin: 0 0 10px 0;">
             {html.escape(message.full_heading, quote=False)}
         </h2>
-        {_email_weather_html(message.weather)}
+        {_email_weather_html(message.weather, message.locale)}
     </div>
 
     <div style="background: #F3F4F6; border-radius: 8px; padding: 15px; margin: 20px 0;">{lead_html}
         {_email_highlights_html(message.highlights)}
     </div>
 
-    {_email_tip_html(message.tip)}
+    {_email_tip_html(message.tip, message.locale)}
 
     {_email_cta_html(message)}
 
     <div style="text-align: center; color: #9CA3AF; font-size: 12px; margin-top: 40px;">
-        <p>Sent by Wardrowbe</p>
+        <p>{chrome["sent"]}</p>
         <p>
             <a href="{html.escape(settings_url)}" style="color: #6B7280;">
-                Manage notification settings
+                {chrome["manage"]}
             </a>
         </p>
     </div>
@@ -765,32 +797,59 @@ def build_family_invite_email(
     family_name: str,
     inviter_name: str,
     invite_token: str,
+    locale: str | None = None,
 ) -> EmailMessage:
     settings = get_settings()
     home_url = settings.app_link()
     invite_url = settings.app_link(f"/invite?token={invite_token}")
-    subject = f"{inviter_name} invited you to join {family_name} on Wardrowbe"
-    body_text = (
-        f'{inviter_name} invited you to join the family "{family_name}" on Wardrowbe. '
-        f"Click here to accept: {invite_url}"
-    )
+    safe_inviter = html.escape(inviter_name)
+    safe_family = html.escape(family_name)
+    safe_url = html.escape(invite_url)
+    safe_home = html.escape(home_url)
+    if is_spanish(locale):
+        subject = f"{inviter_name} te ha invitado a unirte a {family_name} en Wardrowbe"
+        body_text = (
+            f'{inviter_name} te ha invitado a unirte a la familia "{family_name}" en Wardrowbe. '
+            f"Pulsa aquí para aceptar: {invite_url}"
+        )
+        heading = "¡Te han invitado!"
+        lead = (
+            f"<strong>{safe_inviter}</strong> te ha invitado a unirte a la familia "
+            f"<strong>{safe_family}</strong> en Wardrowbe."
+        )
+        action = "Aceptar invitación"
+        note = "Si todavía no tienes cuenta en Wardrowbe, te pediremos que crees una."
+        sent = "Enviado por"
+    else:
+        subject = f"{inviter_name} invited you to join {family_name} on Wardrowbe"
+        body_text = (
+            f'{inviter_name} invited you to join the family "{family_name}" on Wardrowbe. '
+            f"Click here to accept: {invite_url}"
+        )
+        heading = "You&rsquo;re invited!"
+        lead = (
+            f"<strong>{safe_inviter}</strong> invited you to join the family "
+            f"<strong>{safe_family}</strong> on Wardrowbe."
+        )
+        action = "Accept Invitation"
+        note = "If you don&rsquo;t have a Wardrowbe account yet, you&rsquo;ll be asked to create one first."
+        sent = "Sent by"
     html_body = f"""\
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h2 style="color: #111827;">You&rsquo;re invited!</h2>
+    <h2 style="color: #111827;">{heading}</h2>
     <p style="color: #374151; line-height: 1.6;">
-        <strong>{html.escape(inviter_name)}</strong> invited you to join the family
-        <strong>{html.escape(family_name)}</strong> on Wardrowbe.
+        {lead}
     </p>
     <div style="text-align: center; margin: 30px 0;">
-        <a href="{html.escape(invite_url)}"
+        <a href="{safe_url}"
            style="background: #111827; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; display: inline-block;">
-            Accept Invitation
+            {action}
         </a>
     </div>
     <p style="color: #9CA3AF; font-size: 13px;">
-        If you don&rsquo;t have a Wardrowbe account yet, you&rsquo;ll be asked to create one first.
+        {note}
     </p>
     <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 20px 0;">
-    <p style="color: #9CA3AF; font-size: 12px;">Sent by <a href="{html.escape(home_url)}" style="color: #9CA3AF;">Wardrowbe</a></p>
+    <p style="color: #9CA3AF; font-size: 12px;">{sent} <a href="{safe_home}" style="color: #9CA3AF;">Wardrowbe</a></p>
 </div>"""
     return EmailMessage(to=to, subject=subject, html_body=html_body, text_body=body_text)

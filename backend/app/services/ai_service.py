@@ -13,6 +13,7 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel
 
 from app.config import get_settings
+from app.i18n.copy import reply_language_name
 from app.utils.garment_vocabulary import (
     COLORS,
     FITS,
@@ -25,7 +26,6 @@ from app.utils.garment_vocabulary import (
     normalize_color,
     render_tagging_prompt,
 )
-from app.utils.locale import DEFAULT_LOCALE
 from app.utils.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -81,16 +81,6 @@ class ClothingTags(BaseModel):
 
 TAGGING_PROMPT = render_tagging_prompt(load_prompt("clothing_analysis"))
 DESCRIPTION_PROMPT = load_prompt("clothing_description")
-DESCRIPTION_LANGUAGES = {
-    "en": "English",
-    "zh-CN": "Simplified Chinese",
-    "zh-TW": "Traditional Chinese",
-    "ko": "Korean",
-    "ja": "Japanese",
-    "fr": "French",
-    "de": "German",
-    "it": "Italian",
-}
 # Localized replies wrap the sentence in their own script's quotes, which would otherwise
 # show inside the quotes the item dialog already draws around the description.
 DESCRIPTION_QUOTES = (('"', '"'), ("“", "”"), ("「", "」"), ("『", "』"), ("«", "»"))
@@ -586,11 +576,7 @@ class AIService:
         messages_desc = [
             {
                 "role": "system",
-                "content": DESCRIPTION_PROMPT.format(
-                    language=DESCRIPTION_LANGUAGES.get(
-                        locale, DESCRIPTION_LANGUAGES[DEFAULT_LOCALE]
-                    )
-                ),
+                "content": DESCRIPTION_PROMPT.format(language=reply_language_name(locale)),
             },
             {
                 "role": "user",

@@ -4,8 +4,9 @@ import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE,
   NAMESPACES,
+  SOURCE_LOCALE,
   isValidLocale,
-  resolveLocale,
+  matchSupportedLocale,
   type Namespace,
   type SupportedLocale,
 } from '@/lib/i18n/locales';
@@ -23,19 +24,19 @@ async function loadMessages(locale: SupportedLocale): Promise<Messages> {
   const messages: Messages = {};
 
   for (const namespace of NAMESPACES) {
-    const english = await loadNamespace(DEFAULT_LOCALE, namespace);
+    const source = await loadNamespace(SOURCE_LOCALE, namespace);
 
-    if (locale === DEFAULT_LOCALE) {
-      messages[namespace] = english;
+    if (locale === SOURCE_LOCALE) {
+      messages[namespace] = source;
       continue;
     }
 
     try {
       // English underlies every namespace so a key still awaiting translation renders its
-      // English text rather than a raw key path.
-      messages[namespace] = { ...english, ...(await loadNamespace(locale, namespace)) };
+      // English text rather than a raw key path, even when the fork default is another language.
+      messages[namespace] = { ...source, ...(await loadNamespace(locale, namespace)) };
     } catch {
-      messages[namespace] = english;
+      messages[namespace] = source;
     }
   }
 
@@ -71,9 +72,8 @@ async function detectLocale(): Promise<SupportedLocale> {
     .sort((a, b) => b.quality - a.quality);
 
   for (const { tag } of preferences) {
-    if (tag.toLowerCase().split('-')[0] === 'en') return DEFAULT_LOCALE;
-    const resolved = resolveLocale(tag);
-    if (resolved !== DEFAULT_LOCALE) return resolved;
+    const matched = matchSupportedLocale(tag);
+    if (matched) return matched;
   }
 
   return DEFAULT_LOCALE;

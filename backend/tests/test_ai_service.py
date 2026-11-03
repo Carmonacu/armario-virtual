@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
+from app.i18n.copy import DESCRIPTION_LANGUAGES
 from app.services.ai_service import (
-    DESCRIPTION_LANGUAGES,
     AIResponseTruncatedError,
     AIService,
     ClothingTags,
@@ -34,6 +34,7 @@ class TestLocalizedDescription:
         ("locale", "language"),
         [
             ("en", "English"),
+            ("es", "Spanish from Spain, using informal tú"),
             ("zh-CN", "Simplified Chinese"),
             ("zh-TW", "Traditional Chinese"),
             ("ko", "Korean"),

@@ -332,6 +332,7 @@ async def invite_member(
             family_name=family.name,
             inviter_name=current_user.display_name,
             invite_token=invite.token,
+            locale=current_user.locale,
         )
         result = await provider.send(email)
         email_sent = bool(result.get("success"))

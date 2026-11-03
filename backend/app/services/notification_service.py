@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, case, func, literal, select, update
@@ -8,6 +8,17 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.config import get_settings
+from app.i18n.copy import (
+    occasion_label,
+    outfit_day,
+    outfit_greeting,
+    outfit_heading,
+    outfit_ready,
+    outfit_title,
+    tip_label,
+    view_outfit_label,
+    weather_label,
+)
 from app.models.notification import Notification, NotificationSettings, NotificationStatus
 from app.models.outfit import Outfit, OutfitItem, OutfitStatus
 from app.models.schedule import Schedule
@@ -38,15 +49,8 @@ WEATHER_TAGS = (
 )
 
 
-# Returns the title word and the mid-sentence form, because a weekday stays capitalised
-# mid-sentence while today and tomorrow do not.
-def _outfit_day(scheduled_for: date | None, today: date) -> tuple[str, str]:
-    if scheduled_for is None or scheduled_for == today:
-        return "Today", "today"
-    if scheduled_for == today + timedelta(days=1):
-        return "Tomorrow", "tomorrow"
-    weekday = scheduled_for.strftime("%A")
-    return weekday, weekday
+def _user_locale(user: User) -> str:
+    return getattr(user, "locale", None) or "en"
 
 
 class NotificationService:
@@ -135,9 +139,11 @@ class NotificationService:
         await self.db.flush()
         return True
 
-    async def test_setting(self, setting: NotificationSettings) -> tuple[bool, str]:
+    async def test_setting(
+        self, setting: NotificationSettings, locale: str | None = None
+    ) -> tuple[bool, str]:
         try:
-            return await build_provider(setting.channel, setting.config).test_connection()
+            return await build_provider(setting.channel, setting.config).test_connection(locale)
         except Exception as e:
             return False, str(e)
 
@@ -406,15 +412,16 @@ class NotificationDispatcher:
     # The day is derived at send time from the outfit's date rather than stored, so a retry that
     # lands after the user's midnight still names the outfit's day correctly.
     def _build_outfit_message(self, outfit: Outfit, user: User) -> NotificationMessage:
+        locale = _user_locale(user)
         today = get_user_today(user)
         for_tomorrow = outfit.scheduled_for == today + timedelta(days=1)
-        day_label, day_phrase = _outfit_day(outfit.scheduled_for, today)
+        day_label, day_phrase = outfit_day(outfit.scheduled_for, today, locale)
         weather = outfit.weather_data or {}
         temp = weather.get("temperature")
         condition = weather.get("condition")
         # "Date" alone reads as a calendar date, so the title always names the occasion's outfit.
-        occasion = outfit.occasion.replace("-", " ").title()
-        title = f"{day_label}'s {occasion} Outfit"
+        occasion = occasion_label(outfit.occasion, locale)
+        title = outfit_title(day_phrase, day_label, occasion, locale)
         if temp is not None:
             title = f"{title} - {format_temperature(temp)}"
 
@@ -425,30 +432,31 @@ class NotificationDispatcher:
             highlights = []
         highlights = [str(h) for h in highlights[:3]]
 
-        tip_line = f"Tip: {outfit.style_notes}" if outfit.style_notes else None
+        label = tip_label(locale)
+        tip_line = f"{label}: {outfit.style_notes}" if outfit.style_notes else None
         highlight_lines = "\n".join(f"* {h}" for h in highlights) or None
         body_parts = list(filter(None, [outfit.reasoning, highlight_lines, tip_line]))
         short_parts = list(filter(None, [outfit.reasoning, tip_line]))
+        ready, ready_short = outfit_ready(locale)
 
-        greeting = "Good evening" if for_tomorrow else "Good morning"
+        # Tags match the English condition words the weather service stores.
         lowered = str(condition or "").lower()
         tag = next(
             (tag for words, tag in WEATHER_TAGS if any(w in lowered for w in words)),
             "shirt",
         )
+        shown_condition = weather_label(str(condition), locale) if condition is not None else None
 
         return NotificationMessage(
             title=title,
-            body="\n\n".join(body_parts) if body_parts else "Your outfit is ready.",
-            short_body=" \u2022 ".join(short_parts) if short_parts else "Your outfit is ready!",
-            heading=f"{day_label}'s Outfit: {occasion}",
-            greeting=(
-                f"{greeting}, {user.display_name}! Here's your outfit suggestion for {day_phrase}:"
-            ),
+            body="\n\n".join(body_parts) if body_parts else ready,
+            short_body=" \u2022 ".join(short_parts) if short_parts else ready_short,
+            heading=outfit_heading(day_phrase, day_label, occasion, locale),
+            greeting=outfit_greeting(for_tomorrow, user.display_name, day_phrase, locale),
             weather=(
                 WeatherSummary(
                     temperature=temp,
-                    condition=str(condition) if condition is not None else None,
+                    condition=shown_condition,
                     forecast=for_tomorrow,
                 )
                 if outfit.weather_data
@@ -458,7 +466,8 @@ class NotificationDispatcher:
             highlights=highlights,
             tip=outfit.style_notes,
             url=self.settings.app_link("/dashboard/history"),
-            url_label="View Outfit",
+            url_label=view_outfit_label(locale),
             tags=[tag],
             data={"outfit_id": str(outfit.id), "screen": "history"},
+            locale=locale,
         )

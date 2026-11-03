@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
+from app.i18n.copy import item_type_label, more_items, wash_reminder
 from app.models.item import ClothingItem
 from app.models.learning import UserLearningProfile
 from app.models.notification import Notification, NotificationStatus
@@ -324,19 +325,22 @@ async def check_wash_reminders(ctx: dict):
         return {"notified": 0, "skipped": "lock_held"}
 
 
-def wash_reminder_message(items: list[ClothingItem]) -> NotificationMessage:
+def wash_reminder_message(
+    items: list[ClothingItem], locale: str | None = None
+) -> NotificationMessage:
     count = len(items)
-    summary = ", ".join(i.name or i.type for i in items[:5])
+    summary = ", ".join(i.name or item_type_label(i.type, locale) for i in items[:5])
     if count > 5:
-        summary += f" and {count - 5} more"
-    noun = "1 item needs" if count == 1 else f"{count} items need"
+        summary += more_items(count - 5, locale)
+    title, body, url_label = wash_reminder(count, summary, locale)
     return NotificationMessage(
-        title="Laundry Reminder",
-        body=f"{noun} washing: {summary}",
+        title=title,
+        body=body,
         url=get_settings().app_link("/dashboard/wardrobe"),
-        url_label="View Wardrobe",
+        url_label=url_label,
         tags=["shirt", "droplet"],
         data={"screen": "wardrobe"},
+        locale=locale or "en",
     )
 
 
@@ -366,6 +370,10 @@ async def _check_wash_reminders_inner(ctx: dict):
 
         dispatcher = NotificationDispatcher(db)
         notified = 0
+        locale_rows = await db.execute(
+            select(User.id, User.locale).where(User.id.in_([UUID(uid) for uid in user_items]))
+        )
+        locales = {str(user_id): locale for user_id, locale in locale_rows.all()}
 
         for user_id, items in user_items.items():
             try:
@@ -383,7 +391,7 @@ async def _check_wash_reminders_inner(ctx: dict):
                 if existing.scalars().first():
                     continue
 
-                message = wash_reminder_message(items)
+                message = wash_reminder_message(items, locale=locales.get(user_id))
                 results = await dispatcher.deliver(user_id, message)
                 if not results:
                     continue

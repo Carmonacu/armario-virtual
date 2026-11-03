@@ -102,5 +102,8 @@
     "reset": "Ripristina",
     "temperature": "Temperatura"
   },
-  "yourOutfit": "Il tuo outfit"
+  "yourOutfit": "Il tuo outfit",
+  "pregenerated": "Questi outfit sono stati preparati stanotte e sono pronti.",
+  "aiUnavailable": "L'assistente è spento durante il giorno. Questo è l'outfit preparato stanotte; uno nuovo verrà generato questa notte.",
+  "aiUnavailableEmpty": "L'assistente non è disponibile e non c'è un outfit preparato per oggi. Riprova domattina, dopo la generazione notturna."
 }

@@ -102,5 +102,8 @@
     "reset": "Zurücksetzen",
     "temperature": "Temperatur"
   },
-  "yourOutfit": "Dein Outfit"
+  "yourOutfit": "Dein Outfit",
+  "pregenerated": "Diese Outfits wurden über Nacht vorbereitet und sind bereit.",
+  "aiUnavailable": "Der Assistent ist tagsüber aus. Das ist das gestern Nacht vorbereitete Outfit; ein neues kommt heute Nacht.",
+  "aiUnavailableEmpty": "Der Assistent ist gerade aus und für heute liegt kein Outfit bereit. Versuch es morgen früh noch einmal, nach dem nächtlichen Lauf."
 }

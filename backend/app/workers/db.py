@@ -10,6 +10,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
+from app.database import asyncpg_connect_args
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ async def init_db(ctx: dict) -> None:
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=10,
+        connect_args=asyncpg_connect_args(),
     )
     ctx["db_engine"] = engine
     ctx["db_session_factory"] = async_sessionmaker(

@@ -20,6 +20,7 @@ DETACHED_EMAIL_DOMAIN = "detached.invalid"
 EMAIL_IN_USE = "Email already in use by another account."
 FORWARD_AUTH = "forward_auth"
 LEGACY = "legacy"
+SUPABASE = "supabase"
 LEGACY_IDENTITY_CONFLICT = "legacy_identity_conflict"
 # Forward-auth before identities gave a user the proxy sent no Remote-Email for
 # "<Remote-User>@forward-auth.local" (frontend sign-in) or "<Remote-User>@example.com" (backend
@@ -101,6 +102,33 @@ class UserService:
             .join(UserIdentity, UserIdentity.user_id == User.id)
             .where(UserIdentity.provider == provider, UserIdentity.subject == subject)
         )
+
+    async def user_from_supabase(self, claims: dict) -> User:
+        """Map a verified Supabase access token onto this app's user, creating one on first login.
+
+        ``sub`` is the Supabase user id. The email claim is the address Supabase Auth
+        put on the token; ``user_metadata`` is ignored because the user can edit it.
+        """
+        subject = str(claims["sub"])
+        existing = await self._fetch_current(
+            select(User)
+            .join(UserIdentity, UserIdentity.user_id == User.id)
+            .where(UserIdentity.provider == SUPABASE, UserIdentity.subject == subject)
+            .options(selectinload(User.preferences))
+        )
+        if existing is not None:
+            return existing
+
+        email = normalise_email(str(claims["email"]))
+        verified = claims.get("email_verified") is True
+        sync_data = UserSyncRequest(external_id=subject, email=email, display_name="")
+        user, _, _ = await self.sync_from_oidc(
+            sync_data, provider=SUPABASE, email_verified=verified
+        )
+        loaded = await self._fetch_current(
+            select(User).where(User.id == user.id).options(selectinload(User.preferences))
+        )
+        return loaded or user
 
     async def get_by_email(self, email: str) -> User | None:
         return await self._fetch_current(select(User).where(User.email == email))

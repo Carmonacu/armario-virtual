@@ -1,4 +1,5 @@
 import logging
+import re
 from functools import lru_cache
 from typing import Literal
 
@@ -13,8 +14,9 @@ DEFAULT_SECRET_KEY = "change-me-in-production"
 FORWARD_AUTH_SECRET_MIN_LENGTH = 32
 NO_AUTH_CONFIGURED_MESSAGE = (
     "No authentication method configured. "
-    "Set OIDC_ISSUER_URL + OIDC_CLIENT_ID, set FORWARD_AUTH_SECRET, or enable DEBUG mode."
+    "Set SUPABASE_URL, OIDC_ISSUER_URL + OIDC_CLIENT_ID, FORWARD_AUTH_SECRET, or enable DEBUG mode."
 )
+_SCHEMA_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 class Settings(BaseSettings):
@@ -52,14 +54,42 @@ class Settings(BaseSettings):
     # only merges clients into one bucket; counting too many lets a client pick its own key.
     trusted_proxy_count: int = Field(default=0, ge=0)
 
-    # CORS
+    # CORS. A comma-separated list or a JSON array. The Vercel origin must be listed
+    # because the phone API is reached from the browser as well as through the Next proxy.
     cors_origins: list[str] = Field(default=["http://localhost:3000", "http://localhost:8081"])
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def split_cors_origins(cls, value: object) -> object:
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.startswith("["):
+                return value
+            return [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return value
 
     # Database
     database_url: PostgresDsn = Field(
         default="postgresql+asyncpg://wardrobe:wardrobe@localhost:5432/wardrobe"
     )
     database_echo: bool = False
+    # When set, the API, workers and Alembic use only this schema (search_path).
+    # The phone deployment uses the dedicated Supabase schema "armario".
+    database_schema: str | None = Field(default=None)
+
+    @field_validator("database_schema", mode="before")
+    @classmethod
+    def validate_database_schema(cls, value: object) -> object:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        name = value.strip()
+        if not name:
+            return None
+        if _SCHEMA_IDENT.fullmatch(name) is None:
+            raise ValueError("DATABASE_SCHEMA must be a single unquoted SQL identifier")
+        return name
 
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/0")
@@ -81,6 +111,19 @@ class Settings(BaseSettings):
     # Shared secret the authenticating reverse proxy adds as X-Forward-Auth-Secret,
     # so that Remote-* identity headers are only trusted when the proxy sent them.
     forward_auth_secret: str | None = Field(default=None)
+
+    # Supabase Auth (production). Access tokens are verified with the project's JWKS
+    # (ES256/RS256). SUPABASE_JWT_SECRET is only for a project that still signs with HS256.
+    supabase_url: str | None = Field(default=None)
+    supabase_jwt_secret: str | None = Field(default=None)
+
+    @field_validator("supabase_url", mode="before")
+    @classmethod
+    def strip_supabase_url(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        url = value.strip().rstrip("/")
+        return url or None
 
     # AI capability switches.
     # ai_internal_enabled is the master switch; ai_vision_enabled / ai_text_enabled
@@ -207,8 +250,18 @@ class Settings(BaseSettings):
         return bool(self.forward_auth_secret)
 
     @property
+    def supabase_configured(self) -> bool:
+        return bool(self.supabase_url)
+
+    @property
     def dev_mode(self) -> bool:
-        return self.debug and not self.oidc_configured and not self.forward_auth_configured
+        # DEBUG never opens dev login once a real provider is configured, including Supabase.
+        return (
+            self.debug
+            and not self.oidc_configured
+            and not self.forward_auth_configured
+            and not self.supabase_configured
+        )
 
     def validate_security(self) -> str | None:
         if self.secret_key == DEFAULT_SECRET_KEY and not self.dev_mode:
@@ -238,7 +291,19 @@ class Settings(BaseSettings):
                 "FORWARD_AUTH_SECRET must contain only visible ASCII characters and no spaces."
             )
 
-        if not (self.oidc_configured or self.forward_auth_configured or self.dev_mode):
+        if self.supabase_configured and not (
+            self.supabase_url.startswith("https://") or self.supabase_url.startswith("http://")
+        ):
+            raise RuntimeError("SUPABASE_URL must be an http(s) URL.")
+        if self.supabase_configured and self.supabase_url.startswith("http://"):
+            logger.warning("SUPABASE_URL is not https; production projects should use https.")
+
+        if not (
+            self.oidc_configured
+            or self.forward_auth_configured
+            or self.supabase_configured
+            or self.dev_mode
+        ):
             return NO_AUTH_CONFIGURED_MESSAGE
 
         return None
@@ -246,6 +311,8 @@ class Settings(BaseSettings):
     def get_auth_mode(self) -> str:
         if self.forward_auth_configured:
             return "forward-auth+oidc" if self.oidc_configured else "forward-auth"
+        if self.supabase_configured:
+            return "supabase"
         if self.oidc_configured:
             return "oidc"
         if self.dev_mode:

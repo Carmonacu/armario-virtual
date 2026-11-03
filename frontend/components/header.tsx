@@ -2,7 +2,8 @@
 
 import { Menu, Moon, Sun, LogOut } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { signOut } from 'next-auth/react';
+import { signOut } from '@/lib/session';
+import { isSupabaseAuthEnabled } from '@/lib/supabase/env';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/hooks/use-auth';
@@ -30,6 +31,10 @@ export function Header({ onMenuClick }: HeaderProps) {
     // well, because /auth/logout also works without a proxy. The route clears the session
     // cookies itself; a client signOut first would tell every tab, and one of them could sign
     // back in through the still-live proxy session before the proxy logout.
+    if (isSupabaseAuthEnabled()) {
+      void signOut({ callbackUrl: '/login' });
+      return;
+    }
     if (authConfig.data?.forward_auth !== false) {
       window.location.assign('/auth/logout');
       return;

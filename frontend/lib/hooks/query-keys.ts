@@ -70,6 +70,7 @@ export const queryKeys = {
       [...FAMILY_OUTFITS, memberId, page, pageSize] as const,
   },
   familyRatings: (outfitId: string) => ['familyRatings', outfitId] as const,
+  preparedOutfits: ['preparedOutfits'] as const,
 
   analytics: {
     all: ANALYTICS,

@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { Loader2, UserPlus } from 'lucide-react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/session';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useJoinFamilyByToken } from '@/lib/hooks/use-family';

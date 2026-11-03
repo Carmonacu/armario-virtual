@@ -123,4 +123,5 @@ class AuthConfigResponse(BaseModel):
     oidc: AuthConfigOIDC
     dev_mode: bool = False
     forward_auth: bool = False
+    supabase: bool = False
     mobile_notice: str | None = None

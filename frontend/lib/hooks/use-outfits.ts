@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/session';
 import { api } from '@/lib/api';
 import { BulkBatchResponse, drainCursor } from '@/lib/bulk-batches';
 import { useSetTokenIfAvailable, applySessionToken } from '@/lib/hooks/use-session-token';
@@ -100,6 +100,17 @@ function outfitListParams(filters: OutfitFilters, page: number, pageSize: number
     params.cloned_from_outfit_id = filters.cloned_from_outfit_id;
 
   return params;
+}
+
+export function usePreparedOutfits() {
+  const { status } = useSession();
+  useSetTokenIfAvailable();
+
+  return useQuery({
+    queryKey: queryKeys.preparedOutfits,
+    queryFn: () => api.get<Outfit[]>('/outfits/prepared'),
+    enabled: status === 'authenticated',
+  });
 }
 
 export function useOutfits(filters: OutfitFilters = {}, page = 1, pageSize = DEFAULT_PAGE_SIZE) {

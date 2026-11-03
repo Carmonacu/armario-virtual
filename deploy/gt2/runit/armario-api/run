@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+ROOT="${ARMARIO_ROOT:-$HOME/armario-virtual}"
+VENV="${ARMARIO_VENV:-$HOME/.venv/armario}"
+ENV_FILE="${ARMARIO_ENV:-$HOME/armario.env}"
+
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+
+# De día el modelo está apagado. El lote nocturno arranca su propio proceso con la IA encendida.
+export AI_TEXT_ENABLED=false
+export AI_VISION_ENABLED=false
+export DEBUG=false
+
+cd "$ROOT/backend"
+exec "$VENV/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port "${ARMARIO_PORT:-8000}"

@@ -367,6 +367,7 @@ export interface Outfit {
   family_rating_average: number | null;
   family_rating_count: number | null;
   is_starter_suggestion: boolean;
+  ai_unavailable?: boolean;
   created_at: string;
 }
 

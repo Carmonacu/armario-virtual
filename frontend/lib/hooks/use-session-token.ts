@@ -1,10 +1,9 @@
 'use client';
 
-import type { Session } from 'next-auth';
-import { useSession } from 'next-auth/react';
+import { useSession, type AppSession } from '@/lib/session';
 import { setAccessToken } from '@/lib/api';
 
-export function applySessionToken(session: Session | null | undefined) {
+export function applySessionToken(session: AppSession | null | undefined) {
   if (session?.accessToken) {
     setAccessToken(session.accessToken);
   }

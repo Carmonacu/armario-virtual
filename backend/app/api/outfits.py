@@ -34,6 +34,7 @@ from app.services.external_outfit_service import ExternalOutfitService
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
 from app.services.outfit_service import OutfitListFilters, OutfitService, parse_enum_csv
+from app.services.prepared_outfits import load_prepared_outfits
 from app.services.recommendation_service import (
     AIRecommendationError,
     InsufficientWardrobeError,
@@ -165,6 +166,7 @@ class OutfitResponse(BaseModel):
     family_rating_average: float | None = None
     family_rating_count: int | None = None
     is_starter_suggestion: bool = False
+    ai_unavailable: bool = False
     created_at: datetime
 
 
@@ -330,6 +332,7 @@ def outfit_to_response(
     outfit: Outfit,
     wore_instead_items_map: dict[str, list[WoreInsteadItem]] | None = None,
     is_starter_suggestion: bool = False,
+    ai_unavailable: bool = False,
 ) -> OutfitResponse:
     items = []
     for outfit_item in sorted(outfit.items, key=lambda x: x.position):
@@ -413,8 +416,32 @@ def outfit_to_response(
         family_rating_average=family_rating_average,
         family_rating_count=family_rating_count,
         is_starter_suggestion=is_starter_suggestion,
+        ai_unavailable=ai_unavailable,
         created_at=outfit.created_at,
     )
+
+
+AI_UNAVAILABLE_DETAIL = {
+    "code": "ai_unavailable",
+    "message": (
+        "The text assistant is unavailable and there is no outfit prepared for today."
+    ),
+}
+
+
+async def _generate_or_prepared(db: DbSession, user: User, generate):
+    """Call the model, or return the day's prepared outfits when it is down."""
+    try:
+        return await generate(), False
+    except (AIDisabledError, AIRecommendationError) as exc:
+        logger.info("AI unavailable (%s); serving prepared outfits", exc)
+        prepared = await load_prepared_outfits(db, user)
+        if not prepared:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AI_UNAVAILABLE_DETAIL,
+            ) from None
+        return prepared, True
 
 
 @router.post("/suggest", response_model=OutfitResponse)
@@ -445,29 +472,23 @@ async def suggest_outfit(
 
     occasion = request.occasion or _default_occasion(current_user)
 
+    async def _generate():
+        return [
+            await service.generate_recommendation(
+                user=current_user,
+                occasion=occasion,
+                weather_override=weather_override,
+                exclude_items=request.exclude_items,
+                include_items=request.include_items,
+                time_of_day=request.time_of_day,
+            )
+        ]
+
     try:
-        outfit = await service.generate_recommendation(
-            user=current_user,
-            occasion=occasion,
-            weather_override=weather_override,
-            exclude_items=request.exclude_items,
-            include_items=request.include_items,
-            time_of_day=request.time_of_day,
-        )
+        outfits, ai_unavailable = await _generate_or_prepared(db, current_user, _generate)
     except InsufficientWardrobeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from None
-    except AIDisabledError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Internal AI is disabled; outfit suggestions are deferred to an external agent.",
-        ) from None
-    except AIRecommendationError as e:
-        logger.error(f"AI recommendation error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(e),
         ) from None
     except ValueError as e:
@@ -476,12 +497,18 @@ async def suggest_outfit(
             detail=str(e),
         ) from None
 
+    outfit = outfits[0]
     item_service = ItemService(db)
     total_items = await item_service.get_ready_item_count(current_user.id)
     is_starter = total_items <= 5
 
     wore_instead_map = await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
-    return outfit_to_response(outfit, wore_instead_map, is_starter_suggestion=is_starter)
+    return outfit_to_response(
+        outfit,
+        wore_instead_map,
+        is_starter_suggestion=is_starter,
+        ai_unavailable=ai_unavailable,
+    )
 
 
 @router.post("/suggest-options", response_model=list[OutfitResponse])
@@ -512,8 +539,8 @@ async def suggest_outfit_options(
 
     occasion = request.occasion or _default_occasion(current_user)
 
-    try:
-        outfits = await service.generate_recommendations(
+    async def _generate():
+        return await service.generate_recommendations(
             user=current_user,
             occasion=occasion,
             weather_override=weather_override,
@@ -522,20 +549,12 @@ async def suggest_outfit_options(
             time_of_day=request.time_of_day,
             count=3,
         )
+
+    try:
+        outfits, ai_unavailable = await _generate_or_prepared(db, current_user, _generate)
     except InsufficientWardrobeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from None
-    except AIDisabledError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Internal AI is disabled; outfit suggestions are deferred to an external agent.",
-        ) from None
-    except AIRecommendationError as e:
-        logger.error(f"AI recommendation error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(e),
         ) from None
     except ValueError as e:
@@ -550,7 +569,12 @@ async def suggest_outfit_options(
 
     wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
     return [
-        outfit_to_response(outfit, wore_instead_map, is_starter_suggestion=is_starter)
+        outfit_to_response(
+            outfit,
+            wore_instead_map,
+            is_starter_suggestion=is_starter,
+            ai_unavailable=ai_unavailable,
+        )
         for outfit in outfits
     ]
 
@@ -747,6 +771,17 @@ async def bulk_delete_outfits(
         next_cursor=next_cursor,
         has_more=has_more,
     )
+
+
+@router.get("/prepared", response_model=list[OutfitResponse])
+async def prepared_outfits(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> list[OutfitResponse]:
+    """Outfits the nightly batch stored for the user's local today."""
+    outfits = await load_prepared_outfits(db, current_user)
+    wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
+    return [outfit_to_response(outfit, wore_instead_map) for outfit in outfits]
 
 
 @router.get("/{outfit_id}", response_model=OutfitResponse)

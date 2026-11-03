@@ -102,5 +102,8 @@
     "reset": "Restablecer",
     "temperature": "Temperatura"
   },
-  "yourOutfit": "Tu conjunto"
+  "yourOutfit": "Tu conjunto",
+  "pregenerated": "Estos conjuntos se prepararon anoche y ya puedes usarlos.",
+  "aiUnavailable": "La IA no está disponible durante el día. Este es el conjunto preparado anoche; esta noche se generará uno nuevo.",
+  "aiUnavailableEmpty": "La IA no está disponible ahora y no hay un conjunto preparado para hoy. Vuelve a intentarlo por la mañana, después de la generación nocturna."
 }

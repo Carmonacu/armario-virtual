@@ -102,5 +102,8 @@
     "reset": "重設",
     "temperature": "溫度"
   },
-  "yourOutfit": "你的穿搭"
+  "yourOutfit": "你的穿搭",
+  "pregenerated": "這些穿搭是夜間事先準備好的，可以直接用。",
+  "aiUnavailable": "白天助手無法使用。這是昨晚準備的穿搭，新的一套會在今晚產生。",
+  "aiUnavailableEmpty": "助手現在無法使用，而且沒有為今天準備好的穿搭。請在夜間產生之後的早上再試。"
 }

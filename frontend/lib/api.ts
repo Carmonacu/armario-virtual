@@ -33,10 +33,16 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+function apiOrigin(): string {
+  // Empty in local/docker so requests stay on /api/v1 and the Next proxy can reach the backend.
+  // On Vercel this is the Tailscale Funnel origin (https://<phone>.ts.net).
+  return (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+}
+
 async function fetchApi<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { params, ...fetchOptions } = options;
 
-  let url = `${API_BASE_PATH}${endpoint}`;
+  let url = `${apiOrigin()}${API_BASE_PATH}${endpoint}`;
   if (params) {
     const searchParams = new URLSearchParams(params);
     url += `?${searchParams.toString()}`;

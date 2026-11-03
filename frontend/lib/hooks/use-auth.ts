@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession, signOut } from '@/lib/session';
 import { api, ApiError } from '@/lib/api';
 import { applySessionToken } from '@/lib/hooks/use-session-token';
 import type { UserProfile } from './use-user';

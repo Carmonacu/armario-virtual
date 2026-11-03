@@ -484,29 +484,41 @@ class WeatherService:
             return await self.get_current_weather(latitude, longitude)
 
         tomorrow = forecasts[1]  # Index 0 is today, 1 is tomorrow
+        return self._daily_as_weather(tomorrow)
 
+    def _daily_as_weather(self, day: DailyForecast) -> WeatherData:
         # Use average of min/max for the representative temperature
-        avg_temp = (tomorrow.temp_min + tomorrow.temp_max) / 2
+        avg_temp = (day.temp_min + day.temp_max) / 2
         # Use the max temp for feels_like (daytime outfit)
-        feels_like = tomorrow.temp_max
+        feels_like = day.temp_max
 
         return WeatherData(
             temperature=round(avg_temp, 1),
             feels_like=round(feels_like, 1),
-            humidity=tomorrow.humidity if tomorrow.humidity is not None else 50,
-            precipitation_chance=tomorrow.precipitation_chance,
+            humidity=day.humidity if day.humidity is not None else 50,
+            precipitation_chance=day.precipitation_chance,
             precipitation_mm=0,  # Open-Meteo's daily precipitation_sum is a different quantity than the mm-in-next-hour field this dataclass models
-            wind_speed=tomorrow.wind_speed if tomorrow.wind_speed is not None else 0,
-            condition=tomorrow.condition,
-            condition_code=tomorrow.condition_code,
+            wind_speed=day.wind_speed if day.wind_speed is not None else 0,
+            condition=day.condition,
+            condition_code=day.condition_code,
             is_day=True,  # Assume daytime for outfit recommendations
-            uv_index=tomorrow.uv_index if tomorrow.uv_index is not None else 0,
+            uv_index=day.uv_index if day.uv_index is not None else 0,
             timestamp=datetime.utcnow(),
-            temp_min=tomorrow.temp_min,
-            temp_max=tomorrow.temp_max,
-            window_min=tomorrow.temp_min,
-            window_max=tomorrow.temp_max,
+            temp_min=day.temp_min,
+            temp_max=day.temp_max,
+            window_min=day.temp_min,
+            window_max=day.temp_max,
         )
+
+    async def get_weather_for_date(
+        self, latitude: float, longitude: float, day: str
+    ) -> WeatherData:
+        """Forecast for a YYYY-MM-DD date in the location's local timezone."""
+        forecasts = await self.get_daily_forecast(latitude, longitude, days=3)
+        match = next((item for item in forecasts if item.date == day), None)
+        if match is None:
+            raise WeatherServiceError(f"No forecast available for {day}")
+        return self._daily_as_weather(match)
 
     async def check_health(self) -> dict:
         """Check if the weather service is available."""

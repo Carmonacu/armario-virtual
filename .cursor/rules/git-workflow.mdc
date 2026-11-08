@@ -1,0 +1,51 @@
+---
+description: Ramas, PRs y flujo feat/* → develop → main en armario-virtual
+alwaysApply: true
+---
+
+# Git: ramas y pull requests
+
+Ramas de referencia:
+
+| Rama | Rol |
+|------|-----|
+| `develop` | Integración continua (equivalente a dev larga); destino de features y fixes |
+| `main` | Producción; solo entra código ya integrado en `develop` |
+
+## Crear ramas de trabajo
+
+Crear ramas `feat/*`, `fix/*` y `chore/*` **siempre desde `develop` actualizada**, nunca desde `main`:
+
+```bash
+git fetch origin
+git checkout develop
+git pull origin develop
+git checkout -b feat/nombre-corto
+```
+
+- Commits: **Conventional Commits** (`feat:`, `fix:`, `chore:`, `docs:`, etc.).
+- No abrir PRs ni pushes sin que el usuario lo pida explícitamente (salvo que la tarea lo autorice).
+
+## Flujo de pull requests
+
+1. **PR de feature:** `feat/*` (o `fix/*`, `chore/*`) → **`develop`**
+   - Revisión, CI/tests en verde, cuerpo con **Summary** y **Test plan** (véase también `github-mcp.mdc`).
+2. **PR de release:** **`develop` → `main`**
+   - Cuando toque release o despliegue a producción; comprobar checks antes de merge.
+
+**Prohibido por defecto:** PR `feat/*` → `main`. Excepción solo **hotfix urgente en producción**; documentar motivo y alcance en el cuerpo del PR.
+
+## Después del merge
+
+- Tras merge del PR a `develop`: en local, `git checkout develop && git pull origin develop`.
+- Antes de una nueva rama de trabajo: repetir checkout y pull de `develop`.
+- El repositorio puede tener **borrado automático de la rama head** tras merge; es correcto para ramas de feature. **No** borrar ni forzar eliminación de `develop` ni `main`.
+
+## Complemento con GitHub MCP
+
+Esta regla define **qué ramas y bases usar**; `github-mcp.mdc` define **cómo** operar en GitHub:
+
+- Crear PR, leer estado, checks y merge: priorizar MCP `plugin-github-github`; `gh` solo si MCP no cubre la operación.
+- Mismo estándar de calidad en descripciones de PR y verificación pre-merge.
+
+Los agentes deben asumir `develop` como base al proponer ramas `feat/*`, `fix/*` o `chore/*`, y target `develop` al crear PRs de trabajo ordinarios.

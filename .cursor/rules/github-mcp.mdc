@@ -1,0 +1,15 @@
+---
+description: Usar el plugin GitHub (MCP) en lugar de gh CLI cuando esté disponible
+alwaysApply: true
+---
+
+# GitHub: MCP antes que `gh`
+
+Para operaciones con GitHub (issues, PRs, reviews, merge, checks, lectura de archivos del repo vía API):
+
+1. **Priorizar** las herramientas del namespace `plugin-github-github` (`pull_request_read`, `create_pull_request`, `merge_pull_request`, `search_pull_requests`, `issue_read`, etc.) en lugar del CLI `gh` en terminal.
+2. Usar **`gh` solo** si el MCP no expone la operación, falla la llamada o el plugin no está conectado.
+3. Al crear PRs, mantener cuerpo con **Summary** y **Test plan** (misma calidad que antes).
+4. Antes de mergear, comprobar estado/checks con MCP (`pull_request_read`, checks del PR) o herramientas equivalentes.
+
+Esta regla complementa el flujo de commits/PRs: el objetivo del protocolo (revisar diff, mensaje, checks, merge) no cambia; cambia el **medio** preferido.
